@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aind-ophys-bergamo-stitcher"
+description = "Stitches tiff files acquired on Bergamo into an HDF5 format for ophys processing."
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Allen Institute for Neural Dynamics"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3"
+]
+readme = "README.md"
+dynamic = ["version"]
+
+dependencies = [
+    'scanimage-tiff-reader==1.4.1.4',
+    'numpy==1.26.4',
+    'h5py==3.11.0'
+]
+
+[project.optional-dependencies]
+dev = [
+    'black',
+    'coverage',
+    'flake8',
+    'interrogate',
+    'isort',
+    'Sphinx',
+    'furo'
+]
+
+[tool.setuptools.packages.find]
+where = ["code"]
+
+[tool.setuptools_scm]
