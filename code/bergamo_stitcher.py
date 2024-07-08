@@ -1,22 +1,25 @@
+import argparse
 import json
 import logging
 import os
+import sys
 from datetime import datetime as dt
 from pathlib import Path
 from typing import List
-import sys
-import argparse
 
 import h5py as h5
 import numpy as np
-from ScanImageTiffReader import ScanImageTiffReader
 from pydantic import BaseModel, Field
+from ScanImageTiffReader import ScanImageTiffReader
+
 
 class BergamoSettings(BaseModel):
-    """ Settings required to stitch Bergamo images"""
+    """Settings required to stitch Bergamo images"""
+
     input_dir: str = Field(description="directory of tiff files")
     output_dir: str = Field(description="where to save the hdf5 file")
     unique_id: str = Field(description="name for data (how it relates to the experiment)")
+
 
 class BaseStitcher:
     def __init__(self, bergamo_settings: BergamoSettings):
@@ -72,6 +75,7 @@ class BaseStitcher:
         """
 
         # b/c this seems to take a long time
+        logging.info("Writing final output file")
         start_time = dt.now()
         with h5.File(output_filepath, "a") as f:
             for key, value in kwargs.items():
@@ -85,8 +89,9 @@ class BaseStitcher:
                 f[key].resize(meta_size, axis=0)
                 f[key][:] = value
         total_time = (dt.now() - start_time).seconds
-        print(f"Time to add the metadata to h5 {total_time} seconds")
-    
+        logging.info(f"{total_time} seconds to write data")
+        logging.info("Finished...")
+
     @classmethod
     def from_args(cls, args: list):
         """
@@ -134,10 +139,10 @@ class BaseStitcher:
             ),
         )
         job_args = parser.parse_args(args)
-        job_settings=BergamoSettings(
+        job_settings = BergamoSettings(
             input_dir=job_args.input_dir,
             temp_dir=job_args.temp_dir,
-            output_dir=job_args.output_dir
+            output_dir=job_args.output_dir,
         )
         return cls(
             job_settings=job_settings,
@@ -184,6 +189,7 @@ class BergamoTiffStitcher(BaseStitcher):
 
         ## Associate an index with each image
         # Find all the unique stages acquired
+        logging.info("Building data structure")
         image_list = list(self.input_dir.glob("*.tif"))
         epoch_dict = {}
         epochs = set(
@@ -193,6 +199,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 if "stack" not in image_path.name
             ]
         )
+        logging.info("Unique epochs: %s".format(epochs))
         for epoch in epochs:
             epoch_dict[epoch] = [
                 str(image)
@@ -200,6 +207,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 if epoch == "_".join(image.name.split("_")[:-1])
             ]
             epoch_dict[epoch] = sorted(epoch_dict[epoch], key=self._get_index)
+        
         return epoch_dict
 
     def write_bergamo(
@@ -360,5 +368,7 @@ class BergamoTiffStitcher(BaseStitcher):
 
 if __name__ == "__main__":
     sys_args = sys.argv[1:]
+    logging.info("Started job...")
     runner = BergamoSettings.from_args(sys_args)
     runner.run_converter()
+    logging.info("Finished job...")
