@@ -11,6 +11,7 @@ import h5py as h5
 import numpy as np
 from pydantic import BaseModel, Field
 from ScanImageTiffReader import ScanImageTiffReader
+from logging_config import setup_logging
 
 
 class BergamoSettings(BaseModel):
@@ -367,6 +368,7 @@ class BergamoTiffStitcher(BaseStitcher):
 
 
 if __name__ == "__main__":
+    setup_logging("/results/aind_ophys_bergamo_stitcher.log")
     sys_args = sys.argv[1:]
     logging.info("Started job...")
     runner = BergamoSettings.from_args(sys_args)
