@@ -4,17 +4,25 @@ import os
 from datetime import datetime as dt
 from pathlib import Path
 from typing import List
+import sys
+import argparse
 
 import h5py as h5
 import numpy as np
 from ScanImageTiffReader import ScanImageTiffReader
+from pydantic import BaseModel, Field
 
+class BergamoSettings(BaseModel):
+    """ Settings required to stitch Bergamo images"""
+    input_dir: str = Field(description="directory of tiff files")
+    output_dir: str = Field(description="where to save the hdf5 file")
+    unique_id: str = Field(description="name for data (how it relates to the experiment)")
 
-class BaseTiffConverter:
-    def __init__(self, input_dir: Path, output_dir: Path, unique_id: str):
-        self.input_dir = input_dir
-        self.output_dir = output_dir
-        self.unique_id = unique_id
+class BaseStitcher:
+    def __init__(self, bergamo_settings: BergamoSettings):
+        self.input_dir = bergamo_settings.input_dir
+        self.output_dir = bergamo_settings.output_dir
+        self.unique_id = bergamo_settings.unique_id
 
     def write_images(
         self,
@@ -78,11 +86,67 @@ class BaseTiffConverter:
                 f[key][:] = value
         total_time = (dt.now() - start_time).seconds
         print(f"Time to add the metadata to h5 {total_time} seconds")
+    
+    @classmethod
+    def from_args(cls, args: list):
+        """
+        Adds ability to construct settings from a list of arguments.
+        Parameters
+        ----------
+        args : list
+        A list of command line arguments to parse.
+        """
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "-i",
+            "--input-dir",
+            required=True,
+            type=str,
+            help=(
+                """
+                data-directory for bergamo settings
+                """
+            ),
+        )
+        parser.add_argument(
+            "-o",
+            "--output-dir",
+            required=False,
+            default=None,
+            type=str,
+            help=(
+                """
+                output-directory for bergamo settings
+                """
+            ),
+        )
+        parser.add_argument(
+            "-u",
+            "--unique-id",
+            required=False,
+            default=None,
+            type=str,
+            help=(
+                """
+                unique name for h5 file
+                """
+            ),
+        )
+        job_args = parser.parse_args(args)
+        job_settings=BergamoSettings(
+            input_dir=job_args.input_dir,
+            temp_dir=job_args.temp_dir,
+            output_dir=job_args.output_dir
+        )
+        return cls(
+            job_settings=job_settings,
+        )
 
 
-class BergamoTiffStitcher(BaseTiffConverter):
-    def __init__(self, input_dir: Path, output_dir: Path, unique_id: str):
-        super().__init__(input_dir, output_dir, unique_id)
+class BergamoTiffStitcher(BaseStitcher):
+    def __init__(self, bergamo_settings: BergamoSettings):
+        super().__init__(bergamo_settings)
 
     def _get_index(self, file_name: str) -> int:
         """Custom sorting key function to extract the index number from the file name
@@ -164,8 +228,8 @@ class BergamoTiffStitcher(BaseTiffConverter):
         -------
         Path
             converted filepath
-        dict
-            key is the image name, value is the image shape
+        tuple
+            image shape
         """
         start_time = dt.now()
         # to keep track of all the images stored to disk
@@ -242,7 +306,7 @@ class BergamoTiffStitcher(BaseTiffConverter):
         )
         total_time = dt.now() - start_time
         print(f"Time to cache {total_time.seconds} seconds")
-        return self.output_dir / f"{self.unique_id}.h5"
+        return self.output_dir / f"{self.unique_id}.h5", image_shape
 
     def run_converter(self, chunk_size=500) -> Path:
         """
@@ -260,7 +324,7 @@ class BergamoTiffStitcher(BaseTiffConverter):
         """
 
         # Convert the file and build the final metadata structure
-        epochs = self._build_tiff_data_structure()
+        epochs, image_shape = self._build_tiff_data_structure()
 
         # metadata dictionary where the keys are the image filename and the
         # values are the index of the order in which the image was read, which
@@ -270,8 +334,8 @@ class BergamoTiffStitcher(BaseTiffConverter):
         output_filepath = self.write_bergamo(
             cache_size=chunk_size,
             epochs=epochs,
-            image_width=800,
-            image_height=800,
+            image_width=image_shape[0],
+            image_height=image_shape[1],
         )
         # write stack to h5
         # stack_fp = next(self.input_dir.glob("stack*.tif"), None)
@@ -294,15 +358,7 @@ class BergamoTiffStitcher(BaseTiffConverter):
         return output_filepath
 
 
-class FileSplitter:
-    pass
-
-
 if __name__ == "__main__":
-    input_dir = Path(r"\\allen\aind\scratch\BCI_43_032423")
-    # input_dir = Path(r"D:\bergamo\data")
-    output_dir = Path(r"D:\bergamo")
-    unique_id = "bergamo"
-    btc = BergamoTiffStitcher(input_dir, output_dir, unique_id)
-    btc.run_converter()
-    # bergamo_converter = BergamoTiffStitcher(input_dir, output_dir, unique_id)
+    sys_args = sys.argv[1:]
+    runner = BergamoSettings.from_args(sys_args)
+    runner.run_converter()
