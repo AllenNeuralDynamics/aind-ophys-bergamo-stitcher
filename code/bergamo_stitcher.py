@@ -17,8 +17,8 @@ from logging_config import setup_logging
 class BergamoSettings(BaseModel):
     """Settings required to stitch Bergamo images"""
 
-    input_dir: str = Field(description="directory of tiff files")
-    output_dir: str = Field(description="where to save the hdf5 file")
+    input_dir: Path = Field(description="directory of tiff files")
+    output_dir: Path = Field(description="where to save the hdf5 file")
     unique_id: str = Field(description="name for data (how it relates to the experiment)")
 
 
