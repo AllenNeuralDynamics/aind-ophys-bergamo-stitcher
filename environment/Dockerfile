@@ -1,4 +1,4 @@
-# hash:sha256:2970d3d7cc1da8d06cd49b231d737f1be6210367415096660e425d64c05f2ebe
+# hash:sha256:aa77e5b538063a3363603a9e69166724c073f479d0c31e8b5fd04768c07e8cca
 ARG REGISTRY_HOST
 FROM $REGISTRY_HOST/codeocean/jupyterlab:3.0.9-miniconda4.9.2-python3.8-ubuntu20.04
 
@@ -9,5 +9,6 @@ ARG GIT_ACCESS_TOKEN
 COPY git-askpass /
 
 RUN pip install -U --no-cache-dir \
-    h5py \
-    scanimage-tiff-reader
+    h5py==3.11.0 \
+    pydantic==2.8.2 \
+    scanimage-tiff-reader==1.4.1.4

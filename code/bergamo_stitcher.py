@@ -315,7 +315,7 @@ class BergamoTiffStitcher(BaseStitcher):
         )
         total_time = dt.now() - start_time
         print(f"Time to cache {total_time.seconds} seconds")
-        return self.output_dir / f"{self.unique_id}.h5", image_shape
+        return self.output_dir / f"{self.unique_id}.h5"
 
     def run_converter(self, chunk_size=500) -> Path:
         """
@@ -333,7 +333,7 @@ class BergamoTiffStitcher(BaseStitcher):
         """
 
         # Convert the file and build the final metadata structure
-        epochs, image_shape = self._build_tiff_data_structure()
+        epochs = self._build_tiff_data_structure()
 
         # metadata dictionary where the keys are the image filename and the
         # values are the index of the order in which the image was read, which
@@ -343,8 +343,8 @@ class BergamoTiffStitcher(BaseStitcher):
         output_filepath = self.write_bergamo(
             cache_size=chunk_size,
             epochs=epochs,
-            image_width=image_shape[0],
-            image_height=image_shape[1],
+            image_width=800,
+            image_height=800,
         )
         # write stack to h5
         # stack_fp = next(self.input_dir.glob("stack*.tif"), None)
@@ -368,9 +368,8 @@ class BergamoTiffStitcher(BaseStitcher):
 
 
 if __name__ == "__main__":
-    setup_logging("/results/aind_ophys_bergamo_stitcher.log")
     sys_args = sys.argv[1:]
     logging.info("Started job...")
-    runner = BergamoSettings.from_args(sys_args)
+    runner = BergamoTiffStitcher.from_args(sys_args)
     runner.run_converter()
     logging.info("Finished job...")
