@@ -244,9 +244,9 @@ class BergamoTiffStitcher(BaseStitcher):
         # to keep track of all the images stored to disk
         total_count = 0
         # to keep track of the number of images stored in memory
-        images_stored = 0
+        buffer = 0
         # to keep track of the number of images to store to disk when there is buffer overflow
-        frames_to_store = 0
+        frames_stored = 0
         image_buffer = np.zeros((cache_size, image_width, image_height))
         output_filepath = self.output_dir / f"{self.unique_id}.h5"
         start_epoch_count = 0
@@ -260,58 +260,32 @@ class BergamoTiffStitcher(BaseStitcher):
         # metadata dictionary that keeps track of the epoch name and the location of the
         # epoch image in the stack
         epoch_slice_location = {}
-        lookup_table = {}
         for epoch in epochs.keys():
             for filename in epochs[epoch]:
                 epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
                 image_shape = ScanImageTiffReader(str(filename)).shape()
                 image_data = ScanImageTiffReader(str(filename)).data()
-                lookup_table[filename] = {}
-                lookup_table[filename]["image_shape"] = image_shape
-                lookup_table[filename]["epoch"] = epoch_name
                 # Grabbing the epoch name to keep track of changes and
                 # index position of each epoch in the stack. Will compare to previous_epoch_name
-                if image_shape[0] + images_stored >= cache_size:
-                    frames_to_store = cache_size - images_stored
-                    image_buffer[images_stored:cache_size] = image_data[:frames_to_store]
-                    total_count += frames_to_store
-                    self.write_images(
-                        image_buffer, total_count - cache_size, output_filepath
-                    )
-                    images_stored = 0
-                    image_buffer = np.zeros((cache_size, image_width, image_height))
-                    image_buffer[images_stored : image_shape[0] - frames_to_store] = (
-                        image_data[frames_to_store:]
-                    )
-                    images_stored += image_shape[0] - frames_to_store
-                    total_count += image_shape[0] - frames_to_store
-                else:
-                    image_buffer[images_stored : images_stored + image_shape[0]] = (
-                        image_data
-                    )
-                    images_stored += image_shape[0]
-                    total_count += image_shape[0]
-
-                lookup_table[filename]["location_in_stack"] = [
-                    total_count,
-                    total_count + frames_to_store,
-                ]
-
+                while True:
+                    if buffer >= cache_size:
+                        image_buffer = image_data[frames_stored: frames_stored + cache_size]
+                        buffer -= cache_size
+                        self.write_images(image_buffer)
             # save the last epoch slice location
             epoch_slice_location[epoch_name] = []
             epoch_slice_location[epoch_name].append((start_epoch_count, total_count))
             start_epoch_count = total_count + 1
         # if images did not get cached to disk, cache them now
-        if images_stored > 0:
-            final_buffer = np.zeros((images_stored, image_width, image_height))
-            final_buffer[:images_stored] = image_buffer[:images_stored]
-            self.write_images(final_buffer, total_count - images_stored, output_filepath)
+        if buffer > 0:
+            final_buffer = np.zeros((buffer, image_width, image_height))
+            final_buffer[:buffer] = image_buffer[:buffer]
+            self.write_images(final_buffer, total_count - buffer, output_filepath)
         print(f"Total count {total_count}")
         self.write_final_output(
             output_filepath,
             epoch_slice_location=json.dumps(epoch_slice_location),
             epoch_filenames=json.dumps(epochs),
-            lookup_table=json.dumps(lookup_table),
         )
         total_time = dt.now() - start_time
         print(f"Time to cache {total_time.seconds} seconds")
