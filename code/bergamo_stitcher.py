@@ -241,15 +241,11 @@ class BergamoTiffStitcher(BaseStitcher):
             image shape
         """
         start_time = dt.now()
-        # to keep track of all the images stored to disk
-        total_count = 0
-        # to keep track of the number of images stored in memory
-        buffer = 0
-        # to keep track of the number of images to store to disk when there is buffer overflow
-        frames_stored = 0
-        image_buffer = np.zeros((cache_size, image_width, image_height))
+        epoch_count = 0
+        buffer_fill = cache_size
+        image_cache = np.zeros((cache_size, image_width, image_height))
+
         output_filepath = self.output_dir / f"{self.unique_id}.h5"
-        start_epoch_count = 0
         with h5.File(output_filepath, "w") as f:
             f.create_dataset(
                 "data",
@@ -261,27 +257,28 @@ class BergamoTiffStitcher(BaseStitcher):
         # epoch image in the stack
         epoch_slice_location = {}
         for epoch in epochs.keys():
+            start_epoch_count = epoch_count
             for filename in epochs[epoch]:
                 epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
                 image_shape = ScanImageTiffReader(str(filename)).shape()
                 image_data = ScanImageTiffReader(str(filename)).data()
+                frame_count = image_shape[0]
                 # Grabbing the epoch name to keep track of changes and
                 # index position of each epoch in the stack. Will compare to previous_epoch_name
-                while True:
-                    if buffer >= cache_size:
-                        image_buffer = image_data[frames_stored: frames_stored + cache_size]
-                        buffer -= cache_size
-                        self.write_images(image_buffer)
+                while frame_count > 0:
+                    if frame_count < buffer_fill:
+                        # image_cache = image_data[cache_size - buffer_fill:frame_count]
+                        buffer_fill -= frame_count
+                        epoch_count += frame_count
+                        frame_count = 0
+                    if frame_count >= buffer_fill:
+                        image_cache = image_data[buffer_fill:frame_count - buffer_fill]
+                        self.write_images(image_cache, epoch_count, output_filepath)
+                        epoch_count = epoch_count + (buffer_fill - frame_count)
+                        frame_count = frame_count - buffer_fill
+                        buffer_fill = cache_size
             # save the last epoch slice location
-            epoch_slice_location[epoch_name] = []
-            epoch_slice_location[epoch_name].append((start_epoch_count, total_count))
-            start_epoch_count = total_count + 1
-        # if images did not get cached to disk, cache them now
-        if buffer > 0:
-            final_buffer = np.zeros((buffer, image_width, image_height))
-            final_buffer[:buffer] = image_buffer[:buffer]
-            self.write_images(final_buffer, total_count - buffer, output_filepath)
-        print(f"Total count {total_count}")
+            epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count]
         self.write_final_output(
             output_filepath,
             epoch_slice_location=json.dumps(epoch_slice_location),
