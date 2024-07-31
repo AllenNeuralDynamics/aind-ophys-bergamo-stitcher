@@ -267,7 +267,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 # index position of each epoch in the stack. Will compare to previous_epoch_name
                 while frame_count > 0:
                     if frame_count < buffer_fill:
-                        # image_cache = image_data[cache_size - buffer_fill:frame_count]
+                        image_cache = image_data[cache_size - buffer_fill:frame_count]
                         buffer_fill -= frame_count
                         epoch_count += frame_count
                         frame_count = 0
