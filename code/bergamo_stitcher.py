@@ -193,9 +193,11 @@ class BergamoTiffStitcher(BaseStitcher):
                 (0, 800, 800),
                 chunks=True,
                 maxshape=(None, 800, 800),
+                dtype="uint16",
             )
         # metadata dictionary that keeps track of the epoch name and the location of the
         # epoch image in the stack
+        
         epoch_slice_location = {}
         for epoch in epochs.keys():
             for filename in epochs[epoch]:
@@ -212,7 +214,7 @@ class BergamoTiffStitcher(BaseStitcher):
                     while frame_count > 0:
                         if frame_count < cache_size:
                             cache_size = frame_count
-                        image_cache = np.zeros(d)
+                        image_cache = np.zeros((cache_size, image_width, image_height))
                         image_cache[:cache_size] = image_data[:cache_size]
                         self.write_images(image_cache, epoch_count, output_filepath)
                         epoch_count += cache_size
