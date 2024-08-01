@@ -142,11 +142,11 @@ class BaseStitcher:
         job_args = parser.parse_args(args)
         job_settings = BergamoSettings(
             input_dir=job_args.input_dir,
-            temp_dir=job_args.temp_dir,
+            unique_id=job_args.unique_id,
             output_dir=job_args.output_dir,
         )
         return cls(
-            job_settings=job_settings,
+            job_settings,
         )
 
 
@@ -256,6 +256,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 (0, 800, 800),
                 chunks=True,
                 maxshape=(None, 800, 800),
+                dtype="uint16",
             )
         # metadata dictionary that keeps track of the epoch name and the location of the
         # epoch image in the stack
