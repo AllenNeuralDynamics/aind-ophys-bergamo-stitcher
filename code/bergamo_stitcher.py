@@ -157,7 +157,7 @@ class BergamoTiffStitcher(BaseStitcher):
     def write_bergamo(
         self,
         epochs: dict,
-        cache_size=100,
+        cache_size=500,
         image_width: int = 800,
         image_height: int = 800,
     ) -> Path:
@@ -193,7 +193,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 (0, 800, 800),
                 chunks=True,
                 maxshape=(None, 800, 800),
-                dtype="uint16",
+                dtype="int16",
             )
         # metadata dictionary that keeps track of the epoch name and the location of the
         # epoch image in the stack
@@ -201,25 +201,29 @@ class BergamoTiffStitcher(BaseStitcher):
         epoch_slice_location = {}
         for epoch in epochs.keys():
             for filename in epochs[epoch]:
+                print(filename)
                 epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
                 image_data = ScanImageTiffReader(str(filename)).data()
                 image_shape = image_data.shape
                 frame_count = image_shape[0]
-                if frame_count < cache_size:
+                cache_size = 500
+                if frame_count <= cache_size:
                     image_cache = np.zeros((frame_count, image_width, image_height))
-                    image_cache[:frame_count] = image_data[:]
+                    image_cache[:] = image_data[:]
                     self.write_images(image_cache, epoch_count, output_filepath)
                     epoch_count += frame_count
                 else:
+                    start = 0
                     while frame_count > 0:
                         if frame_count < cache_size:
                             cache_size = frame_count
+                        stop = start + cache_size
                         image_cache = np.zeros((cache_size, image_width, image_height))
-                        image_cache[:cache_size] = image_data[:cache_size]
+                        image_cache[:] = image_data[start:stop - 1]
                         self.write_images(image_cache, epoch_count, output_filepath)
                         epoch_count += cache_size
                         frame_count -= cache_size
-                        image_data = image_data[cache_size:]
+                        start += cache_size
             epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count - 1]
             start_epoch_count = epoch_count
         self.write_final_output(
