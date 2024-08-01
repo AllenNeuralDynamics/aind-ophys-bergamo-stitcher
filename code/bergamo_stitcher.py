@@ -157,7 +157,6 @@ class BergamoTiffStitcher(BaseStitcher):
     def write_bergamo(
         self,
         epochs: dict,
-        cache_size=500,
         image_width: int = 800,
         image_height: int = 800,
     ) -> Path:
@@ -169,8 +168,6 @@ class BergamoTiffStitcher(BaseStitcher):
         ----------
         epochs : dict
             A dictionary containg the sorted epochs
-        cache_size : int, optional
-            The number of images to cache in memory, by default 100
         image_width : int, optional
             The width of the image, by default 800
         image_height : int, optional
@@ -186,6 +183,7 @@ class BergamoTiffStitcher(BaseStitcher):
         start_time = dt.now()
         epoch_count = 0
         start_epoch_count = 0
+        test_counter = 0
         output_filepath = self.output_dir / f"{self.unique_id}.h5"
         with h5.File(output_filepath, "w") as f:
             f.create_dataset(
@@ -197,35 +195,20 @@ class BergamoTiffStitcher(BaseStitcher):
             )
         # metadata dictionary that keeps track of the epoch name and the location of the
         # epoch image in the stack
-        
         epoch_slice_location = {}
         for epoch in epochs.keys():
             for filename in epochs[epoch]:
-                print(filename)
                 epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
                 image_data = ScanImageTiffReader(str(filename)).data()
                 image_shape = image_data.shape
                 frame_count = image_shape[0]
-                cache_size = 500
-                if frame_count <= cache_size:
-                    image_cache = np.zeros((frame_count, image_width, image_height))
-                    image_cache[:] = image_data[:]
-                    self.write_images(image_cache, epoch_count, output_filepath)
-                    epoch_count += frame_count
-                else:
-                    start = 0
-                    while frame_count > 0:
-                        if frame_count < cache_size:
-                            cache_size = frame_count
-                        stop = start + cache_size
-                        image_cache = np.zeros((cache_size, image_width, image_height))
-                        image_cache[:] = image_data[start:stop - 1]
-                        self.write_images(image_cache, epoch_count, output_filepath)
-                        epoch_count += cache_size
-                        frame_count -= cache_size
-                        start += cache_size
+                self.write_images(image_data, epoch_count, output_filepath)
+                epoch_count += frame_count
+                test_counter += frame_count
+            print(epoch, test_counter)
             epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count - 1]
             start_epoch_count = epoch_count
+        
         self.write_final_output(
             output_filepath,
             epoch_slice_location=json.dumps(epoch_slice_location),
@@ -235,15 +218,11 @@ class BergamoTiffStitcher(BaseStitcher):
         print(f"Time to cache {total_time.total_seconds()} seconds")
         return self.output_dir / f"{self.unique_id}.h5", image_shape
 
-    def run_converter(self, chunk_size=500) -> Path:
+    def run_converter(self) -> Path:
         """
         Reads in a list of tiff files from a specified path (initialized above) and converts them
         to a single h5 file. Writes relevant metadata to the h5 file.
 
-        Parameters
-        ----------
-        chunk_size : int, optional
-            The chunk size to write to disk, by default 500
         Returns
         -------
         Path
@@ -259,7 +238,6 @@ class BergamoTiffStitcher(BaseStitcher):
         # image shape
         # tmp_file = TemporaryFile(prefix=self.unique_id, suffix=".h5")
         output_filepath = self.write_bergamo(
-            cache_size=chunk_size,
             epochs=epochs,
             image_width=800,
             image_height=800,
