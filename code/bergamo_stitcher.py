@@ -17,8 +17,8 @@ from logging_config import setup_logging
 class BergamoSettings(BaseModel):
     """Settings required to stitch Bergamo images"""
 
-    input_dir: str = Field(description="directory of tiff files")
-    output_dir: str = Field(description="where to save the hdf5 file")
+    input_dir: Path = Field(description="directory of tiff files")
+    output_dir: Path = Field(description="where to save the hdf5 file")
     unique_id: str = Field(description="name for data (how it relates to the experiment)")
 
 
@@ -93,63 +93,6 @@ class BaseStitcher:
         logging.info(f"{total_time} seconds to write data")
         logging.info("Finished...")
 
-    @classmethod
-    def from_args(cls, args: list):
-        """
-        Adds ability to construct settings from a list of arguments.
-        Parameters
-        ----------
-        args : list
-        A list of command line arguments to parse.
-        """
-
-        parser = argparse.ArgumentParser()
-        parser.add_argument(
-            "-i",
-            "--input-dir",
-            required=True,
-            type=str,
-            help=(
-                """
-                data-directory for bergamo settings
-                """
-            ),
-        )
-        parser.add_argument(
-            "-o",
-            "--output-dir",
-            required=False,
-            default=None,
-            type=str,
-            help=(
-                """
-                output-directory for bergamo settings
-                """
-            ),
-        )
-        parser.add_argument(
-            "-u",
-            "--unique-id",
-            required=False,
-            default=None,
-            type=str,
-            help=(
-                """
-                unique name for h5 file
-                """
-            ),
-        )
-        job_args = parser.parse_args(args)
-        job_settings = BergamoSettings(
-            input_dir=job_args.input_dir,
-            temp_dir=job_args.temp_dir,
-            output_dir=job_args.output_dir,
-        )
-        return cls(
-            job_settings=job_settings,
-        )
-
-
 class BergamoTiffStitcher(BaseStitcher):
     def __init__(self, bergamo_settings: BergamoSettings):
         super().__init__(bergamo_settings)
@@ -200,7 +143,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 if "stack" not in image_path.name
             ]
         )
-        logging.info("Unique epochs: %s".format(epochs))
+        logging.info(f"Unique epochs: {epochs}")
         for epoch in epochs:
             epoch_dict[epoch] = [
                 str(image)
@@ -242,9 +185,7 @@ class BergamoTiffStitcher(BaseStitcher):
         """
         start_time = dt.now()
         epoch_count = 0
-        buffer_fill = cache_size
-        image_cache = np.zeros((cache_size, image_width, image_height))
-
+        start_epoch_count = 0
         output_filepath = self.output_dir / f"{self.unique_id}.h5"
         with h5.File(output_filepath, "w") as f:
             f.create_dataset(
@@ -257,35 +198,35 @@ class BergamoTiffStitcher(BaseStitcher):
         # epoch image in the stack
         epoch_slice_location = {}
         for epoch in epochs.keys():
-            start_epoch_count = epoch_count
             for filename in epochs[epoch]:
                 epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
-                image_shape = ScanImageTiffReader(str(filename)).shape()
                 image_data = ScanImageTiffReader(str(filename)).data()
+                image_shape = image_data.shape
                 frame_count = image_shape[0]
-                # Grabbing the epoch name to keep track of changes and
-                # index position of each epoch in the stack. Will compare to previous_epoch_name
-                while frame_count > 0:
-                    if frame_count < buffer_fill:
-                        image_cache = image_data[cache_size - buffer_fill:frame_count]
-                        buffer_fill -= frame_count
-                        epoch_count += frame_count
-                        frame_count = 0
-                    if frame_count >= buffer_fill:
-                        image_cache = image_data[buffer_fill:frame_count - buffer_fill]
+                if frame_count < cache_size:
+                    image_cache = np.zeros((frame_count, image_width, image_height))
+                    image_cache[:frame_count] = image_data[:]
+                    self.write_images(image_cache, epoch_count, output_filepath)
+                    epoch_count += frame_count
+                else:
+                    while frame_count > 0:
+                        if frame_count < cache_size:
+                            cache_size = frame_count
+                        image_cache = np.zeros(d)
+                        image_cache[:cache_size] = image_data[:cache_size]
                         self.write_images(image_cache, epoch_count, output_filepath)
-                        epoch_count = epoch_count + (buffer_fill - frame_count)
-                        frame_count = frame_count - buffer_fill
-                        buffer_fill = cache_size
-            # save the last epoch slice location
-            epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count]
+                        epoch_count += cache_size
+                        frame_count -= cache_size
+                        image_data = image_data[cache_size:]
+            epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count - 1]
+            start_epoch_count = epoch_count
         self.write_final_output(
             output_filepath,
             epoch_slice_location=json.dumps(epoch_slice_location),
             epoch_filenames=json.dumps(epochs),
         )
         total_time = dt.now() - start_time
-        print(f"Time to cache {total_time.seconds} seconds")
+        print(f"Time to cache {total_time.total_seconds()} seconds")
         return self.output_dir / f"{self.unique_id}.h5", image_shape
 
     def run_converter(self, chunk_size=500) -> Path:
@@ -304,7 +245,7 @@ class BergamoTiffStitcher(BaseStitcher):
         """
 
         # Convert the file and build the final metadata structure
-        epochs, image_shape = self._build_tiff_data_structure()
+        epochs = self._build_tiff_data_structure()
 
         # metadata dictionary where the keys are the image filename and the
         # values are the index of the order in which the image was read, which
@@ -314,8 +255,8 @@ class BergamoTiffStitcher(BaseStitcher):
         output_filepath = self.write_bergamo(
             cache_size=chunk_size,
             epochs=epochs,
-            image_width=image_shape[0],
-            image_height=image_shape[1],
+            image_width=800,
+            image_height=800,
         )
         # write stack to h5
         # stack_fp = next(self.input_dir.glob("stack*.tif"), None)
@@ -337,11 +278,67 @@ class BergamoTiffStitcher(BaseStitcher):
 
         return output_filepath
 
+    @classmethod
+    def from_args(cls, args: list):
+        """
+        Adds ability to construct settings from a list of arguments.
+        Parameters
+        ----------
+        args : list
+        A list of command line arguments to parse.
+        """
+
+        parser = argparse.ArgumentParser()
+        parser.add_argument(
+            "-i",
+            "--input-dir",
+            required=True,
+            type=str,
+            help=(
+                """
+                data-directory for bergamo settings
+                """
+            ),
+        )
+        parser.add_argument(
+            "-o",
+            "--output-dir",
+            required=False,
+            default=None,
+            type=str,
+            help=(
+                """
+                output-directory for bergamo settings
+                """
+            ),
+        )
+        parser.add_argument(
+            "-u",
+            "--unique-id",
+            required=False,
+            default=None,
+            type=str,
+            help=(
+                """
+                unique name for h5 file
+                """
+            ),
+        )
+        job_args = parser.parse_args(args)
+        job_settings = BergamoSettings(
+            input_dir=Path(job_args.input_dir),
+            output_dir=Path(job_args.output_dir),
+            unique_id=job_args.unique_id,
+        )
+        return cls(
+            job_settings,
+        )
+
 
 if __name__ == "__main__":
-    setup_logging("/results/aind_ophys_bergamo_stitcher.log")
+    setup_logging("aind_ophys_bergamo_stitcher.log")
     sys_args = sys.argv[1:]
     logging.info("Started job...")
-    runner = BergamoSettings.from_args(sys_args)
+    runner = BergamoTiffStitcher.from_args(sys_args)
     runner.run_converter()
     logging.info("Finished job...")
