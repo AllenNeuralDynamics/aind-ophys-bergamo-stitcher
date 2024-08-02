@@ -240,24 +240,6 @@ class BergamoTiffStitcher(BaseStitcher):
             image_width=800,
             image_height=800,
         )
-        # write stack to h5
-        # stack_fp = next(self.input_dir.glob("stack*.tif"), None)
-        # if stack_fp:
-        #     with ScanImageTiffReader(str(stack_fp)) as reader:
-        #         stack_data = reader.data()
-        #         stack_meta = reader.metadata()
-        #     with h5.File(self.output_dir / "stack.h5", "w") as f:
-        #         f.create_dataset(
-        #             "data",
-        #             (0, 800, 800),
-        #             maxshape=(None, 800, 800),
-        #         )
-        #     self.write_images(stack_data, 0, self.output_dir / "stack.h5")
-        #     self.write_final_output(
-        #         self.output_dir / "stack.h5",
-        #         metadata=json.dumps(stack_meta),
-        #     )
-
         return output_filepath
 
     @classmethod
