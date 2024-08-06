@@ -205,7 +205,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 self.write_images(image_data, epoch_count, output_filepath)
                 epoch_count += frame_count
                 test_counter += frame_count
-            epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count]
+            epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count - 1]
             start_epoch_count = epoch_count
         self.write_final_output(
             output_filepath,
