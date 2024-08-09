@@ -3,15 +3,16 @@ import json
 import logging
 import os
 import sys
+from collections import defaultdict
 from datetime import datetime as dt
 from pathlib import Path
 from typing import List
 
 import h5py as h5
 import numpy as np
+from logging_config import setup_logging
 from pydantic import BaseModel, Field
 from ScanImageTiffReader import ScanImageTiffReader
-from logging_config import setup_logging
 
 
 class BergamoSettings(BaseModel):
@@ -93,6 +94,7 @@ class BaseStitcher:
         logging.info(f"{total_time} seconds to write data")
         logging.info("Finished...")
 
+
 class BergamoTiffStitcher(BaseStitcher):
     def __init__(self, bergamo_settings: BergamoSettings):
         super().__init__(bergamo_settings)
@@ -143,7 +145,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 if "stack" not in image_path.name
             ]
         )
-        logging.info(f"Unique epochs: {epochs}")
+        logging.info("Unique epochs: %s", epochs)
         for epoch in epochs:
             epoch_dict[epoch] = [
                 str(image)
@@ -151,7 +153,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 if epoch == "_".join(image.name.split("_")[:-1])
             ]
             epoch_dict[epoch] = sorted(epoch_dict[epoch], key=self._get_index)
-        
+
         return epoch_dict
 
     def write_bergamo(
@@ -183,38 +185,142 @@ class BergamoTiffStitcher(BaseStitcher):
         start_time = dt.now()
         epoch_count = 0
         start_epoch_count = 0
-        test_counter = 0
+        epochs_count = 0
+        epochs_location = {}
+        header_data = {}
         output_filepath = self.output_dir / f"{self.unique_id}.h5"
         with h5.File(output_filepath, "w") as f:
             f.create_dataset(
                 "data",
-                (0, 800, 800),
+                (0, image_width, image_height),
                 chunks=True,
-                maxshape=(None, 800, 800),
+                maxshape=(None, image_width, image_height),
                 dtype="int16",
             )
         # metadata dictionary that keeps track of the epoch name and the location of the
         # epoch image in the stack
+        epoch_mapping = self.__get_epoch_mapping()
         epoch_slice_location = {}
-        for epoch in epochs.keys():
-            for filename in epochs[epoch]:
-                epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
-                image_data = ScanImageTiffReader(str(filename)).data()
-                image_shape = image_data.shape
-                frame_count = image_shape[0]
-                self.write_images(image_data, epoch_count, output_filepath)
-                epoch_count += frame_count
-                test_counter += frame_count
-            epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count - 1]
-            start_epoch_count = epoch_count
+        for epoch, _ in epoch_mapping.items():
+            for i in epoch_mapping[epoch]:
+                header_counter = 0
+                for filename in epochs[i]:
+                    epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
+                    image_data = ScanImageTiffReader(str(filename)).data()
+                    if header_counter == 0:
+                        header_data[epoch_name] = ScanImageTiffReader(
+                            str(filename)
+                        ).metadata()
+                    image_shape = image_data.shape
+                    frame_count = image_shape[0]
+                    self.write_images(image_data, epoch_count, output_filepath)
+                    epoch_count += frame_count
+                    header_counter += frame_count
+                epoch_slice_location[epoch_name] = [start_epoch_count, epoch_count - 1]
+                start_epoch_count = epoch_count
+            epochs_location[epoch] = [epochs_count, epoch_count - 1]
+            epochs_count += epoch_count
         self.write_final_output(
             output_filepath,
-            epoch_slice_location=json.dumps(epoch_slice_location),
+            tiff_stem_location=json.dumps(epoch_slice_location),
             epoch_filenames=json.dumps(epochs),
+            epoch_location=json.dumps(epochs_location),
+            metadata=json.dumps(header_data),
         )
+
+        # Make reference image
+        len_of_behavior = (
+            epochs_location["single neuron BCI conditioning"][1]
+            - epochs_location["single neuron BCI conditioning"][0]
+            + 1
+        )
+        vsource = h5.VirtualSource(
+            output_filepath, "data", shape=(epoch_count, image_width, image_height)
+        )
+        layout = h5.VirtualLayout(
+            shape=(
+                epochs_location["single neuron BCI conditioning"][1]
+                - epochs_location["single neuron BCI conditioning"][0]
+                + 1,
+                image_width,
+                image_height,
+            ),
+            dtype="uint16",
+        )
+        layout[0:len_of_behavior-1, :, :] = vsource[
+            epochs_location["single neuron BCI conditioning"][0] : epochs_location[
+                "single neuron BCI conditioning"
+            ][1],
+            :,
+            :,
+        ]
+        with h5.File(
+            output_filepath.parent / "reference_image.h5", "w", libver="latest"
+        ) as f:
+            f.create_virtual_dataset("data", layout, fillvalue=0)
+
+        # Make movie alias
+        if not epochs_location.get("2p photostimulation", ""):
+            return self.output_dir / f"{self.unique_id}.h5", image_shape
+        total_length = 0
+        for epoch, epoch_index in epochs_location.items():
+            if epoch != "2p photostimulation":
+                total_length += epoch_index[1] - epoch_index[0] + 1
+        vsource = h5.VirtualSource(
+            output_filepath, "data", shape=(epoch_count, image_width, image_height)
+        )
+        layout = h5.VirtualLayout(
+            shape=(total_length, image_width, image_height), dtype="uint16"
+        )
+        offset = 0
+        epoch_vset = {}
+        new_epoch_location = {}
+        for epoch, epoch_index in epochs_location.items():
+            if epoch != "2p photostimulation":
+                length = epoch_index[1] - epoch_index[0] + 1
+                layout[offset : offset + length - 1, :, :] = vsource[
+                    epoch_index[0] : epoch_index[1], :, :
+                ]
+                epoch_vset[epoch] = [offset, offset + length - 1]
+                for k, v in epoch_mapping.items():
+                    if k == epoch:
+                        t = offset
+                        for i in v:
+                            new_epoch_location[i] = [t, t + length - 1]
+                            t += length
+                offset += length
+            else:
+                pass
+
+        with h5.File(output_filepath.parent / "VDS.h5", "w", libver="latest") as f:
+            f.create_virtual_dataset("data", layout, fillvalue=0)
+            f.create_dataset("epoch_location", data=json.dumps(epoch_vset))
+            f.create_dataset("tiff_stem_location", data=json.dumps(new_epoch_location))
+
         total_time = dt.now() - start_time
-        logging.info(f"Time to cache {total_time.total_seconds()} seconds")
+        logging.info("Time to cache %s seconds", total_time.total_seconds())
+
         return self.output_dir / f"{self.unique_id}.h5", image_shape
+
+    def __get_epoch_mapping(self) -> dict:
+        """Maps the epoch to the stem of the tiff file
+
+        Returns
+        -------
+        dict
+            A dictionary of the mapped epochs
+        """
+        epoch_mapping = defaultdict(list)
+        session_fp = next(self.input_dir.rglob("session.json"), "")
+        if not session_fp:
+            raise FileNotFoundError("session.json not found")
+        with open(session_fp, "rb") as f:
+            session_data = json.load(f)
+        for epoch in session_data["stimulus_epochs"]:
+            epoch_mapping[epoch["stimulus_name"]].append(
+                epoch["output_parameters"]["tiff_stem"]
+            )
+        return epoch_mapping
 
     def run_converter(self) -> Path:
         """
