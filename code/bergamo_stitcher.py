@@ -244,7 +244,7 @@ class BergamoTiffStitcher(BaseStitcher):
             A dictionary of the mapped epochs
         """
         epoch_mapping = defaultdict(list)
-        session_fp = next(Path("data").rglob("session.json"), "")
+        session_fp = next(Path("../data").rglob("session.json"), "")
         print(session_fp)
         if not session_fp:
             raise FileNotFoundError("session.json not found")
