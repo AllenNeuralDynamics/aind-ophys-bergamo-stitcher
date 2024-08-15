@@ -148,3 +148,4 @@ dmypy.json
 !.vscode/extensions.json
 !.vscode/*.code-snippets
 code/run_capsule.py
+.vscode

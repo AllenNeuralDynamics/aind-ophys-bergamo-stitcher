@@ -245,7 +245,7 @@ class BergamoTiffStitcher(BaseStitcher):
                 image_width,
                 image_height,
             ),
-            dtype="uint16",
+            dtype="int16",
         )
         layout[0:len_of_behavior-1, :, :] = vsource[
             epochs_location["single neuron BCI conditioning"][0] : epochs_location[
@@ -270,7 +270,7 @@ class BergamoTiffStitcher(BaseStitcher):
             output_filepath, "data", shape=(epoch_count, image_width, image_height)
         )
         layout = h5.VirtualLayout(
-            shape=(total_length, image_width, image_height), dtype="uint16"
+            shape=(total_length, image_width, image_height), dtype="int16"
         )
         offset = 0
         epoch_vset = {}
@@ -311,7 +311,8 @@ class BergamoTiffStitcher(BaseStitcher):
             A dictionary of the mapped epochs
         """
         epoch_mapping = defaultdict(list)
-        session_fp = next(self.input_dir.rglob("session.json"), "")
+        session_fp = next(Path("../data").rglob("session.json"), "")
+        print(session_fp)
         if not session_fp:
             raise FileNotFoundError("session.json not found")
         with open(session_fp, "rb") as f:
