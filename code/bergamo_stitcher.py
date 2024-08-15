@@ -202,8 +202,10 @@ class BergamoTiffStitcher(BaseStitcher):
         epoch_mapping = self.__get_epoch_mapping()
         epoch_slice_location = {}
         for epoch, _ in epoch_mapping.items():
+            logging.info("Epoch %s", epoch)
             for i in epoch_mapping[epoch]:
                 header_counter = 0
+                logging.info("Trial %s", i)
                 for filename in epochs[i]:
                     epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
                     image_data = ScanImageTiffReader(str(filename)).data()
@@ -225,17 +227,9 @@ class BergamoTiffStitcher(BaseStitcher):
             tiff_stem_location=json.dumps(epoch_slice_location),
             epoch_filenames=json.dumps(epochs),
             epoch_location=json.dumps(epochs_location),
+            epoch_mapping=json.dumps(epoch_mapping),
             metadata=json.dumps(header_data),
         )
-
-        # Make reference image
-        delta_behavior_epoch = {k:(v[1] - v[0]) for k, v in epochs_location["single neuron BCI conditioning"].items()}
-        behavior_epoch = max(delta_behavior_epoch)
-        with h5.File(output_filepath, "r") as f:
-            original_data = f["data"][:]
-            with h5.File(self.output_dir / "reference_image.h5", "w") as f:
-                vsource = h5.VirtualSource("data", original_data)
-                layout = h5.VirtualLayout(shape=)
         total_time = dt.now() - start_time
         logging.info("Time to cache %s seconds", total_time.total_seconds())
 
@@ -250,7 +244,7 @@ class BergamoTiffStitcher(BaseStitcher):
             A dictionary of the mapped epochs
         """
         epoch_mapping = defaultdict(list)
-        session_fp = next(Path("../data").rglob("session.json"), "")
+        session_fp = next(Path("data").rglob("session.json"), "")
         print(session_fp)
         if not session_fp:
             raise FileNotFoundError("session.json not found")
