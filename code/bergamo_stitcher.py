@@ -229,75 +229,13 @@ class BergamoTiffStitcher(BaseStitcher):
         )
 
         # Make reference image
-        behavior_stem = epoch_mapping["single neuron BCI conditioning"][0]
-        len_of_behavior = (
-            epoch_slice_location[behavior_stem][1]
-            - epoch_slice_location[behavior_stem][0]
-            + 1
-        )
-        vsource = h5.VirtualSource(
-            output_filepath, "data", shape=(epoch_count, image_width, image_height)
-        )
-        layout = h5.VirtualLayout(
-            shape=(
-                epochs_location["single neuron BCI conditioning"][1]
-                - epochs_location["single neuron BCI conditioning"][0]
-                + 1,
-                image_width,
-                image_height,
-            ),
-            dtype="int16",
-        )
-        layout[0:len_of_behavior-1, :, :] = vsource[
-            epochs_location["single neuron BCI conditioning"][0] : epochs_location[
-                "single neuron BCI conditioning"
-            ][1],
-            :,
-            :,
-        ]
-        with h5.File(
-            output_filepath.parent / "reference_image.h5", "w", libver="latest"
-        ) as f:
-            f.create_virtual_dataset("data", layout, fillvalue=0)
-
-        # Make movie alias
-        if not epochs_location.get("2p photostimulation", ""):
-            return self.output_dir / f"{self.unique_id}.h5", image_shape
-        total_length = 0
-        for epoch, epoch_index in epochs_location.items():
-            if epoch != "2p photostimulation":
-                total_length += epoch_index[1] - epoch_index[0] + 1
-        vsource = h5.VirtualSource(
-            output_filepath, "data", shape=(epoch_count, image_width, image_height)
-        )
-        layout = h5.VirtualLayout(
-            shape=(total_length, image_width, image_height), dtype="int16"
-        )
-        offset = 0
-        epoch_vset = {}
-        new_epoch_location = {}
-        for epoch, epoch_index in epochs_location.items():
-            if epoch != "2p photostimulation":
-                length = epoch_index[1] - epoch_index[0] + 1
-                layout[offset : offset + length - 1, :, :] = vsource[
-                    epoch_index[0] : epoch_index[1], :, :
-                ]
-                epoch_vset[epoch] = [offset, offset + length - 1]
-                for k, v in epoch_mapping.items():
-                    if k == epoch:
-                        t = offset
-                        for i in v:
-                            new_epoch_location[i] = [t, t + length - 1]
-                            t += length
-                offset += length
-            else:
-                pass
-
-        with h5.File(output_filepath.parent / "VDS.h5", "w", libver="latest") as f:
-            f.create_virtual_dataset("data", layout, fillvalue=0)
-            f.create_dataset("epoch_location", data=json.dumps(epoch_vset))
-            f.create_dataset("tiff_stem_location", data=json.dumps(new_epoch_location))
-
+        delta_behavior_epoch = {k:(v[1] - v[0]) for k, v in epochs_location["single neuron BCI conditioning"].items()}
+        behavior_epoch = max(delta_behavior_epoch)
+        with h5.File(output_filepath, "r") as f:
+            original_data = f["data"][:]
+            with h5.File(self.output_dir / "reference_image.h5", "w") as f:
+                vsource = h5.VirtualSource("data", original_data)
+                layout = h5.VirtualLayout(shape=)
         total_time = dt.now() - start_time
         logging.info("Time to cache %s seconds", total_time.total_seconds())
 
