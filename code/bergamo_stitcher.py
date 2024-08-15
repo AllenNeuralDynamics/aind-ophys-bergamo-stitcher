@@ -229,9 +229,10 @@ class BergamoTiffStitcher(BaseStitcher):
         )
 
         # Make reference image
+        behavior_stem = epoch_mapping["single neuron BCI conditioning"][0]
         len_of_behavior = (
-            epochs_location["single neuron BCI conditioning"][1]
-            - epochs_location["single neuron BCI conditioning"][0]
+            epoch_slice_location[behavior_stem][1]
+            - epoch_slice_location[behavior_stem][0]
             + 1
         )
         vsource = h5.VirtualSource(
