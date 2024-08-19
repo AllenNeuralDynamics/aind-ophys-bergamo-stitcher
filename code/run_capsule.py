@@ -10,7 +10,7 @@ if __name__ == "__main__":
     try:
         data_dir = next(input_dir.glob("*/ophys"))
     except:
-        data_dir = next(input_dir.glob("*ophys"))
+        data_dir = next(input_dir.glob("ophys"))
     output_dir = Path("../results")
     data_description = next(input_dir.rglob("data_description.json")
     with open(data_description) as j:
