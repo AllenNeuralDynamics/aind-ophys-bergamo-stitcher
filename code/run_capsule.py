@@ -12,7 +12,7 @@ if __name__ == "__main__":
     except:
         data_dir = next(input_dir.glob("ophys"))
     output_dir = Path("../results")
-    data_description = next(input_dir.rglob("data_description.json")
+    data_description = next(input_dir.rglob("data_description.json"))
     with open(data_description) as j:
         unique_id = json.load(j)["name"]
     unique_id = "_".join(str(unique_id).split("_")[-3:])
