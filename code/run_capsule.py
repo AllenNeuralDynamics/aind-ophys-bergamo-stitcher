@@ -9,10 +9,12 @@ if __name__ == "__main__":
     input_dir = Path("../data/")
     try:
         data_dir = next(input_dir.glob("*/ophys"))
+        data_description = next(input_dir.glob("*/data_description.json"))
     except:
         data_dir = next(input_dir.glob("ophys"))
+        data_description = next(input_dir.glob("data_description.json"))
     output_dir = Path("../results")
-    data_description = next(input_dir.rglob("data_description.json"))
+    
     with open(data_description) as j:
         unique_id = json.load(j)["name"]
     unique_id = "_".join(str(unique_id).split("_")[-3:])
