@@ -7,7 +7,7 @@ from logging_config import setup_logging
 if __name__ == "__main__":
     setup_logging("../results/aind_ophys_bergamo_stitcher.log")
     input_dir = Path("../data/")
-    data_dir = next(input_dir.rglob("*/ophys/"))
+    data_dir = next(input_dir.rglob("*/ophys"))
     output_dir = Path("../results")
     unique_id = next(Path("../data").glob("single-plane*"))
     unique_id = "_".join(str(unique_id).split("_")[-3:])
