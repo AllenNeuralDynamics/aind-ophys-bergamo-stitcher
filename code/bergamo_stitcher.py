@@ -186,6 +186,7 @@ class BergamoTiffStitcher(BaseStitcher):
         epoch_count = 0
         start_epoch_count = 0
         test_counter = 0
+        header_data = {}
         output_filepath = self.output_dir / f"{self.unique_id}.h5"
         with h5.File(output_filepath, "w") as f:
             f.create_dataset(
@@ -199,9 +200,14 @@ class BergamoTiffStitcher(BaseStitcher):
         # epoch image in the stack
         tiff_stem_location = {}
         for epoch in epochs.keys():
+            header_count = 0
             for filename in epochs[epoch]:
                 epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
                 image_data = ScanImageTiffReader(str(filename)).data()
+                if header_count == 0:
+                        header_data[epoch_name] = ScanImageTiffReader(
+                            str(filename)
+                        ).metadata()
                 image_shape = image_data.shape
                 frame_count = image_shape[0]
                 self.write_images(image_data, epoch_count, output_filepath)
@@ -213,6 +219,7 @@ class BergamoTiffStitcher(BaseStitcher):
             output_filepath,
             tiff_stem_location=json.dumps(tiff_stem_location),
             epoch_filenames=json.dumps(epochs),
+            metadata=json.dumps(header_data),
         )
         total_time = dt.now() - start_time
         logging.info("Time to cache %s seconds", total_time.total_seconds())
