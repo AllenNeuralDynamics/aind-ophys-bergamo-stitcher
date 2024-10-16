@@ -8,10 +8,10 @@ if __name__ == "__main__":
     setup_logging("../results/aind_ophys_bergamo_stitcher.log")
     input_dir = Path("../data/")
     try:
-        data_dir = next(input_dir.glob("*/ophys"))
+        data_dir = next(input_dir.glob("*/*ophys"))
         data_description = next(input_dir.glob("*/data_description.json"))
     except:
-        data_dir = next(input_dir.glob("ophys"))
+        data_dir = next(input_dir.glob("*ophys"))
         data_description = next(input_dir.glob("data_description.json"))
     output_dir = Path("../results")
     
