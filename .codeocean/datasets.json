@@ -1,0 +1,9 @@
+{
+	"version": 1,
+	"attached_datasets": [
+		{
+			"id": "c5bc459a-96d5-4354-a699-636ec10430c1",
+			"mount": "bergamo_raw_740369_2024-10-09"
+		}
+	]
+}
