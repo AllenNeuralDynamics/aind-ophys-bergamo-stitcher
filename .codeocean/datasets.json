@@ -2,8 +2,8 @@
 	"version": 1,
 	"attached_datasets": [
 		{
-			"id": "c5bc459a-96d5-4354-a699-636ec10430c1",
-			"mount": "bergamo_raw_740369_2024-10-09"
+			"id": "842d4108-aa0b-4967-8d07-2600370ff94a",
+			"mount": "single-plane-ophys_633070_2023-03-17_15-00-12"
 		}
 	]
 }
