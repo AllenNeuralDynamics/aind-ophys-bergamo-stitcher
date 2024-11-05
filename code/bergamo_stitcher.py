@@ -156,6 +156,12 @@ class BergamoTiffStitcher(BaseStitcher):
         
         return epoch_dict
 
+    def _get_image_dim(self) -> tuple:
+    """Grab image shape from metdata"""
+    file_path = next(self.input_dir.glob("*.tif"))
+    with ScanImageTiffReader(file_path) as reader:
+        return reader.shape()[1:]
+
     def write_bergamo(
         self,
         epochs: dict,
@@ -238,7 +244,7 @@ class BergamoTiffStitcher(BaseStitcher):
 
         # Convert the file and build the final metadata structure
         epochs = self._build_tiff_data_structure()
-
+        shape = self._get_image_dim()
         # metadata dictionary where the keys are the image filename and the
         # values are the index of the order in which the image was read, which
         # epoch it's associated with,  the location of the image in the h5 stack and the
@@ -246,8 +252,8 @@ class BergamoTiffStitcher(BaseStitcher):
         # tmp_file = TemporaryFile(prefix=self.unique_id, suffix=".h5")
         output_filepath = self.write_bergamo(
             epochs=epochs,
-            image_width=800,
-            image_height=800,
+            image_width=shape[0],
+            image_height=[1],
         )
         return output_filepath
 
