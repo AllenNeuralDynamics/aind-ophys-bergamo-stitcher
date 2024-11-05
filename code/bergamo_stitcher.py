@@ -253,7 +253,7 @@ class BergamoTiffStitcher(BaseStitcher):
         output_filepath = self.write_bergamo(
             epochs=epochs,
             image_width=shape[0],
-            image_height=[1],
+            image_height=shape[1],
         )
         return output_filepath
 
