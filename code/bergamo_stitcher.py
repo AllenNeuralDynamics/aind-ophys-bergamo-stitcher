@@ -159,7 +159,7 @@ class BergamoTiffStitcher(BaseStitcher):
     def _get_image_dim(self) -> tuple:
         """Grab image shape from metdata"""
         file_path = next(self.input_dir.glob("*.tif"))
-        with ScanImageTiffReader(file_path) as reader:
+        with ScanImageTiffReader(str(file_path)) as reader:
             return reader.shape()[1:]
 
     def write_bergamo(
