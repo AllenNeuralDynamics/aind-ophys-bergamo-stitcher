@@ -27,6 +27,7 @@ class BaseStitcher:
         self.input_dir = bergamo_settings.input_dir
         self.output_dir = bergamo_settings.output_dir
         self.unique_id = bergamo_settings.unique_id
+        self.session_fp = bergamo_settings.session_fp
 
     def write_images(
         self,
@@ -105,7 +106,7 @@ class BergamoTiffStitcher(BaseStitcher):
         dict
             The session dictionary
         """
-        with open(self.bergamo_settings.session_fp, "r") as f:
+        with open(self.session_fp, "r") as f:
             return json.load(f)
     
     def _extract_tiff_from_session(self, session_data: dict) -> dict:
@@ -130,10 +131,11 @@ class BergamoTiffStitcher(BaseStitcher):
         epochs = {}
         for epoch in stimulus_epochs:
             epoch_files = []
+            tiff_stem = epoch["output_parameters"]["tiff_stem"]
             for stim in epoch["output_parameters"]["tiff_files"]:
-                epoch_files.append(native_tiffs_dict[stim])
-            epochs[epoch] = epoch_files
-            epochs["stimulus_name"] = epoch["stimulus_name"]
+                epoch_files.append(str(native_tiffs_dict[stim]))
+            epochs[tiff_stem] = {"tiff_files": epoch_files}
+            epochs[tiff_stem]["stimulus_name"] = epoch["stimulus_name"]
         return epochs
 
 
@@ -172,7 +174,7 @@ class BergamoTiffStitcher(BaseStitcher):
         start_time = dt.now()
         epoch_count = 0
         start_epoch_count = 0
-        test_counter = 0
+        trial_counter = 0
         header_data = {}
         output_filepath = self.output_dir / f"{self.unique_id}.h5"
         with h5.File(output_filepath, "w") as f:
@@ -185,26 +187,29 @@ class BergamoTiffStitcher(BaseStitcher):
             )
         # metadata dictionary that keeps track of the epoch name and the location of the
         # epoch image in the stack
-        tiff_stem_location = {}
+        epoch_location = {}
+        tiff_stim_location = {}
         for epoch in epochs.keys():
             header_count = 0
-            for filename in epochs[epoch]:
+            for filename in epochs[epoch]["tiff_files"]:
                 epoch_name = "_".join(os.path.basename(filename).split("_")[:-1])
-                image_data = ScanImageTiffReader(str(filename)).data()
+                image_data = ScanImageTiffReader(filename).data()
                 if header_count == 0:
                         header_data[epoch_name] = ScanImageTiffReader(
-                            str(filename)
+                            filename
                         ).metadata()
                 image_shape = image_data.shape
                 frame_count = image_shape[0]
                 self.write_images(image_data, epoch_count, output_filepath)
                 epoch_count += frame_count
-                test_counter += frame_count
-            tiff_stem_location[epoch_name] = [start_epoch_count, epoch_count - 1]
+                tiff_stim_location[os.path.basename(filename)] = [trial_counter, (trial_counter + frame_count) - 1]
+                trial_counter += frame_count
+            epoch_location[epoch_name] = [start_epoch_count, epoch_count - 1]
             start_epoch_count = epoch_count
         self.write_final_output(
             output_filepath,
-            tiff_stem_location=json.dumps(tiff_stem_location),
+            tiff_stem_locations=json.dumps(tiff_stim_location),
+            epoch_location=json.dumps(epoch_location),
             epoch_filenames=json.dumps(epochs),
             metadata=json.dumps(header_data),
         )
