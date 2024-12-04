@@ -208,8 +208,8 @@ class BergamoTiffStitcher(BaseStitcher):
             start_epoch_count = epoch_count
         self.write_final_output(
             output_filepath,
-            tiff_stem_locations=json.dumps(tiff_stim_location),
-            epoch_location=json.dumps(epoch_location),
+            trial_locations=json.dumps(tiff_stim_location),
+            epoch_locations=json.dumps(epoch_location),
             epoch_filenames=json.dumps(epochs),
             metadata=json.dumps(header_data),
         )
