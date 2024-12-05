@@ -188,7 +188,7 @@ class BergamoTiffStitcher(BaseStitcher):
         # metadata dictionary that keeps track of the epoch name and the location of the
         # epoch image in the stack
         epoch_location = {}
-        tiff_stim_location = {}
+        trial_locations = {}
         for epoch in epochs.keys():
             header_count = 0
             for filename in epochs[epoch]["tiff_files"]:
@@ -202,13 +202,13 @@ class BergamoTiffStitcher(BaseStitcher):
                 frame_count = image_shape[0]
                 self.write_images(image_data, epoch_count, output_filepath)
                 epoch_count += frame_count
-                tiff_stim_location[os.path.basename(filename)] = [trial_counter, (trial_counter + frame_count) - 1]
+                trial_locations[os.path.basename(filename)] = [trial_counter, (trial_counter + frame_count) - 1]
                 trial_counter += frame_count
             epoch_location[epoch_name] = [start_epoch_count, epoch_count - 1]
             start_epoch_count = epoch_count
         self.write_final_output(
             output_filepath,
-            trial_locations=json.dumps(tiff_stim_location),
+            trial_locations=json.dumps(trial_locations),
             epoch_locations=json.dumps(epoch_location),
             epoch_filenames=json.dumps(epochs),
             metadata=json.dumps(header_data),
